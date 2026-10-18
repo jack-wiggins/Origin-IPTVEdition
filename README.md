@@ -1,1 +1,1 @@
-# Origin-IPTVEdition
+# OriginHTPC
