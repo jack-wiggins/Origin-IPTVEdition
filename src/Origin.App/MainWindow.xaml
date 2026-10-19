@@ -1,0 +1,58 @@
+<Window x:Class="Origin.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:rendering="clr-namespace:Origin.Rendering"
+        Title="Origin"
+        Width="1280" Height="720" MinWidth="800" MinHeight="450"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF020A1E"
+        Foreground="{StaticResource Brush.Text}"
+        FontFamily="{StaticResource Font.Regular}"
+        UseLayoutRounding="True"
+        FocusVisualStyle="{x:Null}">
+
+    <Grid x:Name="Root">
+        <!-- Layer 0: the DirectX ribbon background. -->
+        <rendering:AnimatedBackground x:Name="Backdrop" />
+
+        <!-- Layer 1: full-window pages (live TV). Not scaled: video renders in its own child window. -->
+        <Grid x:Name="FullWindowHost" />
+
+        <!-- Layer 2: the 10-foot interface, laid out for a height of 1080 and scaled to the window. -->
+        <Grid x:Name="Scaled">
+            <Grid.LayoutTransform>
+                <ScaleTransform x:Name="UiScale" />
+            </Grid.LayoutTransform>
+
+            <Grid x:Name="PageHost" />
+
+            <TextBlock x:Name="PageTitle" Margin="90,64,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                       FontFamily="{StaticResource Font.Light}" FontSize="44" Opacity="0.92" IsHitTestVisible="False" />
+
+            <TextBlock x:Name="ClockText" Margin="0,70,90,0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                       FontFamily="{StaticResource Font.Light}" FontSize="34" Foreground="{StaticResource Brush.TextSecondary}"
+                       IsHitTestVisible="False" />
+
+            <StackPanel x:Name="ToastHost" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,70,56"
+                        IsHitTestVisible="False" />
+
+            <!-- Appears while the mouse moves, like Media Center's mouse controls. -->
+            <Grid x:Name="MouseChrome" VerticalAlignment="Top" Margin="26,12,26,0" Opacity="0" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button x:Name="ChromeBack" Style="{StaticResource Button.Chrome}" Content="{StaticResource Icon.Back}"
+                            ToolTip="Back" Click="OnChromeBack" />
+                    <Button Style="{StaticResource Button.Chrome}" Content="{StaticResource Icon.Origin}" ToolTip="Start"
+                            Click="OnChromeHome" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource Button.Chrome}" Content="{StaticResource Icon.Minimize}" ToolTip="Minimize"
+                            Click="OnChromeMinimize" />
+                    <Button Style="{StaticResource Button.Chrome}" Content="{StaticResource Icon.FullScreen}" ToolTip="Full screen (Alt+Enter)"
+                            Click="OnChromeFullScreen" />
+                    <Button Style="{StaticResource Button.Chrome}" Content="{StaticResource Icon.Close}" ToolTip="Close Origin"
+                            Click="OnChromeClose" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

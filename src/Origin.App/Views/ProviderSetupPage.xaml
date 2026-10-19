@@ -1,0 +1,69 @@
+<nav:OriginPage x:Class="Origin.Views.ProviderSetupPage"
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:nav="clr-namespace:Origin.Navigation"
+                xmlns:controls="clr-namespace:Origin.Controls">
+    <Grid Margin="90,160,90,70">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="7*" MaxWidth="980" />
+            <ColumnDefinition Width="60" />
+            <ColumnDefinition Width="5*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel>
+            <TextBlock Style="{StaticResource Text.Heading}" Text="Connect your IPTV provider" />
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,10,0,34"
+                       Text="Enter the Xtream Codes details your provider gave you. Origin downloads your M3U playlist from this server and copies its live channels into your lineup, ready to match with Schedules Direct." />
+
+            <TextBlock Style="{StaticResource Text.Label}" Text="SERVER URL" />
+            <TextBox x:Name="ServerBox" Tag="http://example.com:8080  (or paste your full M3U link)"
+                     Text="{Binding ServerUrl, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="OnServerLostFocus" />
+
+            <Grid Margin="0,22,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Text.Label}" Text="USERNAME" />
+                    <TextBox x:Name="UserBox" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource Text.Label}" Text="{Binding PasswordLabel}" />
+                    <PasswordBox x:Name="PasswordBox" />
+                </StackPanel>
+            </Grid>
+
+            <Grid Margin="0,22,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Text.Label}" Text="STREAM FORMAT" />
+                    <controls:ChoiceSpinner ItemsSource="{Binding Formats}" SelectedItem="{Binding SelectedFormat}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource Text.Label}" Text="PLAYER USER AGENT (OPTIONAL)" />
+                    <TextBox Text="{Binding UserAgent, UpdateSourceTrigger=PropertyChanged}" Tag="only if your provider asks for one" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Margin="0,44,0,0">
+                <Button Content="test connection" Command="{Binding TestCommand}" />
+                <Button Content="save" Command="{Binding SaveCommand}" />
+                <Button Content="save and update lineup" Command="{Binding SaveAndUpdateCommand}" />
+            </StackPanel>
+        </StackPanel>
+
+        <Border Grid.Column="2" Style="{StaticResource Panel.Card}" VerticalAlignment="Top" Margin="0,104,0,0">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.Label}" Text="ACCOUNT" />
+                <TextBlock Style="{StaticResource Text.Heading}" Text="{Binding StatusTitle}" Foreground="{Binding StatusBrush}" />
+                <TextBlock Style="{StaticResource Text.Caption}" Margin="0,14,0,0" FontSize="22" LineHeight="34" Text="{Binding StatusDetail}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</nav:OriginPage>

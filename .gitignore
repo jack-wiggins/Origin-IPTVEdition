@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+artifacts/
+
+# IDE
+.vs/
+*.user
+*.suo
+*.userprefs
+.idea/
+
+# NuGet
+packages/
+*.nupkg
+
+# Test results
+TestResults/

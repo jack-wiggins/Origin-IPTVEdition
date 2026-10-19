@@ -1,0 +1,128 @@
+<nav:OriginPage x:Class="Origin.Views.SchedulesDirectPage"
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:nav="clr-namespace:Origin.Navigation"
+                xmlns:controls="clr-namespace:Origin.Controls">
+    <nav:OriginPage.Resources>
+        <DataTemplate x:Key="LineupTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontSize="23" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" FontSize="16" Foreground="{StaticResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Border Grid.Column="1" Margin="12,0,0,0" Padding="10,3" CornerRadius="3" VerticalAlignment="Center"
+                        Background="{StaticResource Brush.Accent}" Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="IN USE" FontSize="14" FontFamily="{StaticResource Font.Semibold}" />
+                </Border>
+            </Grid>
+        </DataTemplate>
+    </nav:OriginPage.Resources>
+
+    <Grid Margin="90,160,90,56">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="44" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="44" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 1. Account -->
+        <StackPanel>
+            <TextBlock Style="{StaticResource Text.Heading}" Text="Guide listings" />
+            <TextBlock Style="{StaticResource Text.Caption}" Margin="0,10,0,30"
+                       Text="Schedules Direct supplies the TV listings. Origin matches every channel in your playlist to a station in the lineup you choose here." />
+
+            <TextBlock Style="{StaticResource Text.Label}" Text="USERNAME" />
+            <TextBox x:Name="UserBox" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Style="{StaticResource Text.Label}" Margin="2,22,0,8" Text="{Binding PasswordLabel}" />
+            <PasswordBox x:Name="PasswordBox" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,30,0,0">
+                <Button Content="sign in" Command="{Binding SignInCommand}" />
+            </StackPanel>
+
+            <TextBlock Margin="0,28,0,0" Style="{StaticResource Text.Caption}" Text="{Binding AccountText}" />
+            <TextBlock Margin="0,10,0,0" Style="{StaticResource Text.Caption}" FontSize="17" Foreground="{StaticResource Brush.TextDim}"
+                       Text="No account? Sign up at schedulesdirect.org. Origin stores only a hash of your password." />
+        </StackPanel>
+
+        <!-- 2. Lineups on the account -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.Heading}" Text="Your lineups" />
+                <TextBlock Style="{StaticResource Text.Caption}" Margin="0,10,0,22"
+                           Text="Pick the lineup that best matches your IPTV channels — usually your local cable or satellite provider." />
+            </StackPanel>
+            <Border Grid.Row="1" Style="{StaticResource Panel.Card}" Padding="8">
+                <Grid>
+                    <ListBox x:Name="AccountList" Style="{StaticResource List.Origin}" ItemsSource="{Binding AccountLineups}"
+                             SelectedItem="{Binding SelectedAccountLineup}" ItemTemplate="{StaticResource LineupTemplate}" />
+                    <TextBlock Style="{StaticResource Text.Caption}" Margin="20" TextAlignment="Center" VerticalAlignment="Center"
+                               Text="{Binding AccountListHint}" />
+                </Grid>
+            </Border>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,24,0,0">
+                <Button Content="use for origin" Command="{Binding UseCommand}" />
+                <Button Content="{Binding RemoveLabel}" Command="{Binding RemoveCommand}" MinWidth="150" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 3. Find and add a lineup -->
+        <Grid Grid.Column="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.Heading}" Text="Add a lineup" />
+                <TextBlock Style="{StaticResource Text.Label}" Margin="2,22,0,8" Text="COUNTRY" />
+                <controls:ChoiceSpinner ItemsSource="{Binding Countries}" SelectedItem="{Binding SelectedCountry}" />
+                <Grid Margin="0,18,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Text="{Binding PostalCode, UpdateSourceTrigger=PropertyChanged}" Tag="{Binding PostalCodeHint}" />
+                    <Button Grid.Column="1" Content="search" Command="{Binding SearchCommand}" Margin="16,0,0,0" MinWidth="140" />
+                </Grid>
+            </StackPanel>
+            <Border Grid.Row="1" Style="{StaticResource Panel.Card}" Padding="8">
+                <Grid>
+                    <ListBox x:Name="SearchList" Style="{StaticResource List.Origin}" ItemsSource="{Binding SearchResults}"
+                             SelectedItem="{Binding SelectedSearchResult}" ItemTemplate="{StaticResource LineupTemplate}" />
+                    <TextBlock Style="{StaticResource Text.Caption}" Margin="20" TextAlignment="Center" VerticalAlignment="Center"
+                               Text="{Binding SearchHint}" />
+                </Grid>
+            </Border>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,24,0,0">
+                <Button Content="add to account" Command="{Binding AddCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Status / next step -->
+        <Grid Grid.Row="1" Grid.ColumnSpan="5" Margin="0,28,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource Text.Body}" VerticalAlignment="Center" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" />
+            <Button Grid.Column="1" Content="update lineup now" Command="{Binding UpdateNowCommand}" Margin="0"
+                    Visibility="{Binding ShowUpdatePrompt, Converter={StaticResource BoolToVisibility}}" />
+        </Grid>
+    </Grid>
+</nav:OriginPage>

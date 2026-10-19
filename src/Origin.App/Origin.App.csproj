@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- .NET Framework 4.8 is the newest framework that runs on Windows 7 SP1. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Origin</RootNamespace>
+    <AssemblyName>OriginHTPC</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpDX.Direct3D9" Version="4.2.0" />
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.9.4" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Origin.Core\Origin.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Leave out LibVLC plugins Origin never uses (streaming out, visualisations, Lua scripts). -->
+  <ItemGroup>
+    <VlcWindowsX64ExcludeFiles Include="lua\%2A%2A;plugins\stream_out\%2A%2A;plugins\access_output\%2A%2A;plugins\visualization\%2A%2A;plugins\services_discovery\%2A%2A" />
+    <VlcWindowsX86ExcludeFiles Include="lua\%2A%2A;plugins\stream_out\%2A%2A;plugins\access_output\%2A%2A;plugins\visualization\%2A%2A;plugins\services_discovery\%2A%2A" />
+  </ItemGroup>
+
+</Project>
