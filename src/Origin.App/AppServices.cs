@@ -1,4 +1,5 @@
 using System;
+using Origin.Core.Guide;
 using Origin.Core.Iptv;
 using Origin.Core.Lineup;
 using Origin.Core.SchedulesDirect;
@@ -18,7 +19,8 @@ namespace Origin
             Playlists = new PlaylistStore(paths.PlaylistFile);
             Lineups = new LineupStore(paths.LineupFile);
             SchedulesDirect = new SchedulesDirectService(Settings, paths);
-            Lineup = new LineupService(Settings, Playlists, Lineups, SchedulesDirect);
+            Guide = new GuideStore(paths.GuideDirectory);
+            Lineup = new LineupService(Settings, Playlists, Lineups, SchedulesDirect, new GuideDownloader(SchedulesDirect, Guide));
             Playback = new PlaybackService(Settings);
         }
 
@@ -31,6 +33,9 @@ namespace Origin
         public LineupStore Lineups { get; }
 
         public SchedulesDirectService SchedulesDirect { get; }
+
+        /// <summary>Downloaded schedules and program details.</summary>
+        public GuideStore Guide { get; }
 
         public LineupService Lineup { get; }
 

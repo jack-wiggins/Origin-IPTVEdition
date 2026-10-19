@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Windows;
 using Origin.Core.Diagnostics;
+using Origin.Core.Guide;
 using Origin.Core.Lineup;
 using Origin.Infrastructure;
 using Origin.Input;
@@ -12,7 +13,8 @@ namespace Origin.Views
 {
     /// <summary>
     /// Tasks › update lineup: downloads the M3U, fetches the Schedules Direct lineup, copies the
-    /// playlist into Origin's lineup and matches every channel, then shows what happened.
+    /// playlist into Origin's lineup, matches every channel and downloads the guide, then shows
+    /// what happened.
     /// </summary>
     public partial class LineupUpdatePage : OriginPage
     {
@@ -127,7 +129,8 @@ namespace Origin.Views
             ResultText.Text = "Copied " + result.Channels.ToString("N0") + " live channels" + source + extras
                               + (result.Lineup.SchedulesDirectLineupName != null
                                   ? " and matched them against " + result.Lineup.SchedulesDirectLineupName + "."
-                                  : ".");
+                                  : ".")
+                              + DescribeGuide(result.Guide);
 
             ChannelsValue.Text = result.Channels.ToString("N0");
             MappedValue.Text = result.Mapped.ToString("N0");
@@ -141,6 +144,21 @@ namespace Origin.Views
             Reveal();
 
             Shell.ShowToast("Lineup updated: " + result.Channels.ToString("N0") + " channels, " + result.Mapped.ToString("N0") + " matched.", ToastKind.Success);
+        }
+
+        /// <summary>" The guide has 14 days of listings for 212 stations (1,204 programs updated)."</summary>
+        private static string DescribeGuide(GuideUpdateResult guide)
+        {
+            if (guide == null || guide.StationsWithListings == 0)
+            {
+                return string.Empty;
+            }
+
+            var stations = guide.StationsWithListings == 1 ? "1 station" : guide.StationsWithListings.ToString("N0") + " stations";
+            var updated = guide.ProgramsDownloaded == 0 ? "nothing had changed"
+                : guide.ProgramsDownloaded == 1 ? "1 program updated"
+                : guide.ProgramsDownloaded.ToString("N0") + " programs updated";
+            return " The guide has " + GuideDownloader.DaysAhead + " days of listings for " + stations + " (" + updated + ").";
         }
 
         private void ShowFailure(string message)

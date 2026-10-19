@@ -31,10 +31,21 @@
                             </Border>
                             <TextBlock x:Name="BannerNumber" Grid.Column="1" Margin="34,0,30,0" VerticalAlignment="Center"
                                        FontFamily="{StaticResource Font.Light}" FontSize="76" />
+                            <!-- What's on now (or the channel name when there are no listings), then what's next. -->
                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                 <TextBlock x:Name="BannerName" FontFamily="{StaticResource Font.Light}" FontSize="44" TextTrimming="CharacterEllipsis" />
                                 <TextBlock x:Name="BannerDetail" Margin="2,6,0,0" FontSize="22" Foreground="{StaticResource Brush.TextSecondary}"
                                            TextTrimming="CharacterEllipsis" />
+                                <Grid x:Name="BannerProgress" Margin="2,12,0,0" Height="4" Width="520" HorizontalAlignment="Left" Visibility="Collapsed">
+                                    <Border Background="#33FFFFFF" CornerRadius="2" />
+                                    <Border Background="{StaticResource Brush.AccentBright}" CornerRadius="2" RenderTransformOrigin="0,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform x:Name="BannerProgressScale" ScaleX="0" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="BannerNext" Margin="2,10,0,0" FontSize="20" Foreground="{StaticResource Brush.TextSecondary}"
+                                           TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                             </StackPanel>
                             <StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="30,0,0,0">
                                 <TextBlock x:Name="BannerClock" FontFamily="{StaticResource Font.Light}" FontSize="38" HorizontalAlignment="Right" />

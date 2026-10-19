@@ -39,6 +39,9 @@ namespace Origin.Core.Storage
         /// <summary>Origin's channel lineup: playlist channels mapped onto Schedules Direct stations.</summary>
         public string LineupFile => Path.Combine(Root, "lineup.json");
 
+        /// <summary>Downloaded schedules and program details (see <c>GuideStore</c>).</summary>
+        public string GuideDirectory => Path.Combine(Cache, "guide");
+
         public string GetSchedulesDirectLineupFile(string lineupId)
         {
             var invalid = Path.GetInvalidFileNameChars();

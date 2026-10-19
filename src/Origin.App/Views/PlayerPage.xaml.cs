@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -319,18 +320,55 @@ namespace Origin.Views
             }
 
             BannerNumber.Text = _channel.Number;
-            BannerName.Text = _channel.Name;
             BannerLogo.Source = _logos.Convert(_channel.DisplayLogoUrl, typeof(ImageSource), null, null) as ImageSource;
+            UpdateNowAndNext();
+        }
 
-            var mapping = _channel.Mapping;
-            BannerDetail.Text = mapping != null
-                ? mapping.Callsign + (string.IsNullOrEmpty(mapping.Affiliate) ? string.Empty : " · " + mapping.Affiliate) + "   ·   " + _channel.Group
-                : _channel.Group;
+        /// <summary>The program on now, how far through it is, and what follows, from the guide listings.</summary>
+        private void UpdateNowAndNext()
+        {
+            if (_channel == null)
+            {
+                return;
+            }
+
+            var stationId = _channel.Mapping?.StationId;
+            var now = DateTime.UtcNow;
+            var current = Services.Guide.GetListingAt(stationId, now);
+            var next = Services.Guide.GetNextListing(stationId, current?.EndUtc ?? now);
+
+            if (current != null)
+            {
+                BannerName.Text = current.Title;
+                var parts = new List<string> { current.StartUtc.ToLocalTime().ToString("t") + " – " + current.EndUtc.ToLocalTime().ToString("t") };
+                if (!string.IsNullOrEmpty(current.EpisodeLine))
+                {
+                    parts.Add(current.EpisodeLine);
+                }
+
+                parts.Add(_channel.Name);
+                BannerDetail.Text = string.Join("   ·   ", parts);
+                BannerProgressScale.ScaleX = current.ProgressAt(now);
+                BannerProgress.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                var mapping = _channel.Mapping;
+                BannerName.Text = _channel.Name;
+                BannerDetail.Text = mapping != null
+                    ? mapping.Callsign + (string.IsNullOrEmpty(mapping.Affiliate) ? string.Empty : " · " + mapping.Affiliate) + "   ·   " + _channel.Group
+                    : _channel.Group;
+                BannerProgress.Visibility = Visibility.Collapsed;
+            }
+
+            BannerNext.Text = next != null ? "Next   " + next.StartUtc.ToLocalTime().ToString("t") + "   " + next.Title : string.Empty;
+            BannerNext.Visibility = next != null ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void ShowBanner()
         {
             BannerClock.Text = DateTime.Now.ToString("t");
+            UpdateNowAndNext();
             if (!_bannerShown)
             {
                 _bannerShown = true;

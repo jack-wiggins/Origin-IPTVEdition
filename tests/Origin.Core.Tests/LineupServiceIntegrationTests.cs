@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Origin.Core.Guide;
 using Origin.Core.Iptv;
 using Origin.Core.Lineup;
 using Origin.Core.SchedulesDirect;
@@ -33,7 +34,7 @@ namespace Origin.Core.Tests
             using (var temp = new TempDirectory())
             {
                 ServeProvider(server);
-                ServeSchedulesDirect(server);
+                var guide = ServeSchedulesDirect(server);
 
                 var (service, settings, paths) = CreateService(server, temp.Path);
                 var progress = new List<string>();
@@ -70,6 +71,100 @@ namespace Origin.Core.Tests
                 Assert.Contains(SdClient.HashPassword("sdpass"), login.Body);
                 Assert.Equal("mock-token", server.Requests.Single(r => r.Path == "/20141201/lineups/USA-TEST-X").Token);
                 Assert.True(File.Exists(paths.GetSchedulesDirectLineupFile("USA-TEST-X")));
+
+                // Then the guide: two weeks of listings for the four matched stations, cached on disk.
+                Assert.Equal(4, result.Guide.Stations);
+                Assert.Equal(4, result.Guide.StationsWithListings);
+                Assert.Equal(4 * 15, result.Guide.DaysDownloaded);
+                Assert.Equal(new[] { "10003", "10212", "32630", "82547" }, guide.Md5Requests.Single().Select(s => s.Station).OrderBy(s => s));
+                Assert.Contains("Downloading program details", progress);
+                Assert.All(server.Requests.Where(r => r.Path.StartsWith("/20141201/schedules") || r.Path == "/20141201/programs"),
+                    r => Assert.Equal("mock-token", r.Token));
+
+                var store = new GuideStore(paths.GuideDirectory);
+                var abc = byName["US: ABC 7 New York"].Mapping.StationId;
+                var now = DateTime.UtcNow;
+                Assert.Equal(FakeGuideService.Title(abc, now.Hour), store.GetListingAt(abc, now).Title);
+                Assert.Equal(FakeGuideService.Title(abc, (now.Hour + 1) % 24), store.GetNextListing(abc, now).Title);
+                var nextNinetyMinutes = store.GetListings(abc, now, now.AddMinutes(90));
+                Assert.InRange(nextNinetyMinutes.Count, 2, 3);
+                Assert.All(nextNinetyMinutes, l => Assert.NotNull(l.Program));
+            }
+        }
+
+        [Fact]
+        public async Task Downloads_the_guide_for_newly_included_channels_without_refreshing_the_rest()
+        {
+            using (var server = new MockServer())
+            using (var temp = new TempDirectory())
+            {
+                ServeProvider(server);
+                var guide = ServeSchedulesDirect(server);
+                var (service, settings, paths) = CreateService(server, temp.Path);
+                settings.Current.Lineup.IncludeNewGroups = false;
+                settings.Current.Lineup.Groups["USA | Sports"] = true;
+                await service.UpdateAsync(new LineupUpdateOptions(), null, CancellationToken.None);
+                guide.ClearRequests();
+
+                settings.Current.Lineup.Groups["USA | Locals"] = true;
+                var result = await service.UpdateAsync(
+                    new LineupUpdateOptions { DownloadPlaylist = false, RefreshSchedulesDirect = false }, null, CancellationToken.None);
+
+                // Only the two local stations had no listings yet.
+                Assert.Equal(new[] { "10003", "10212" }, guide.Md5Requests.Single().Select(s => s.Station).OrderBy(s => s));
+                Assert.Equal(4, result.Guide.StationsWithListings);
+                Assert.Empty(result.Warnings);
+                Assert.True(new GuideStore(paths.GuideDirectory).HasListings("10212"));
+            }
+        }
+
+        [Fact]
+        public async Task Keeps_the_guide_and_the_lineup_when_schedules_direct_is_down_for_listings()
+        {
+            using (var server = new MockServer())
+            using (var temp = new TempDirectory())
+            {
+                ServeProvider(server);
+                ServeSchedulesDirect(server);
+                var (service, _, paths) = CreateService(server, temp.Path);
+                await service.UpdateAsync(new LineupUpdateOptions(), null, CancellationToken.None);
+                File.Delete(paths.LineupFile);
+
+                server.Route("/20141201/schedules/md5", _ => (503, "{\"code\":3000,\"response\":\"SERVICE_OFFLINE\",\"message\":\"Down for maintenance\"}"));
+                var result = await service.UpdateAsync(new LineupUpdateOptions(), null, CancellationToken.None);
+
+                // The update still succeeds and saves the lineup; the guide keeps yesterday's download.
+                Assert.Equal(4, result.Mapped);
+                Assert.True(File.Exists(paths.LineupFile));
+                Assert.Null(result.Guide);
+                Assert.Contains(result.Warnings, w => w.Contains("temporarily offline") && w.Contains("keeps the listings"));
+                Assert.NotNull(new GuideStore(paths.GuideDirectory).GetListingAt("10212", DateTime.UtcNow));
+            }
+        }
+
+        [Fact]
+        public async Task Cancelling_during_the_guide_download_keeps_the_new_lineup()
+        {
+            using (var server = new MockServer())
+            using (var temp = new TempDirectory())
+            using (var cancel = new CancellationTokenSource())
+            {
+                ServeProvider(server);
+                ServeSchedulesDirect(server);
+                var (service, _, paths) = CreateService(server, temp.Path);
+                var progress = new SyncProgress(p =>
+                {
+                    if (p.Stage == "Downloading schedules")
+                    {
+                        cancel.Cancel();
+                    }
+                });
+
+                var result = await service.UpdateAsync(new LineupUpdateOptions(), progress, cancel.Token);
+
+                Assert.Equal(4, result.Mapped);
+                Assert.True(File.Exists(paths.LineupFile));
+                Assert.Contains(result.Warnings, w => w.Contains("guide download was cancelled"));
             }
         }
 
@@ -147,8 +242,9 @@ namespace Origin.Core.Tests
             settings.Current.SchedulesDirect.LineupName = "Test Cable";
             settings.Save();
 
+            var schedulesDirect = new SchedulesDirectService(settings, paths);
             var service = new LineupService(settings, new PlaylistStore(paths.PlaylistFile), new LineupStore(paths.LineupFile),
-                new SchedulesDirectService(settings, paths));
+                schedulesDirect, new GuideDownloader(schedulesDirect, new GuideStore(paths.GuideDirectory)));
             return (service, settings, paths);
         }
 
@@ -170,13 +266,17 @@ namespace Origin.Core.Tests
                     : (403, string.Empty));
         }
 
-        private static void ServeSchedulesDirect(MockServer server)
+        private static FakeGuideService ServeSchedulesDirect(MockServer server)
         {
             var map = ChannelMatcherTests.SampleLineup();
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(map);
             server.Route("/20141201/token", _ => (200, "{\"code\":0,\"token\":\"mock-token\",\"tokenExpires\":4102444800}"));
             server.Route("/20141201/lineups/USA-TEST-X", request =>
                 request.Headers["token"] == "mock-token" ? (200, json) : (403, "{\"code\":4006,\"response\":\"TOKEN_EXPIRED\"}"));
+
+            var guide = new FakeGuideService();
+            guide.Serve(server);
+            return guide;
         }
 
         private sealed class SyncProgress : IProgress<LineupUpdateProgress>
@@ -191,7 +291,7 @@ namespace Origin.Core.Tests
             public void Report(LineupUpdateProgress value) => _report(value);
         }
 
-        private sealed class TempDirectory : IDisposable
+        internal sealed class TempDirectory : IDisposable
         {
             public TempDirectory()
             {
@@ -216,8 +316,8 @@ namespace Origin.Core.Tests
         internal sealed class MockServer : IDisposable
         {
             private readonly HttpListener _listener = new HttpListener();
-            private readonly ConcurrentDictionary<string, Func<HttpListenerRequest, (int Status, string Body)>> _routes =
-                new ConcurrentDictionary<string, Func<HttpListenerRequest, (int, string)>>();
+            private readonly ConcurrentDictionary<string, Func<HttpListenerRequest, string, (int Status, string Body)>> _routes =
+                new ConcurrentDictionary<string, Func<HttpListenerRequest, string, (int, string)>>();
 
             public MockServer()
             {
@@ -239,6 +339,12 @@ namespace Origin.Core.Tests
             public List<RecordedRequest> Requests => RequestLog.ToList();
 
             public void Route(string path, Func<HttpListenerRequest, (int, string)> handler)
+            {
+                _routes[path] = (request, body) => handler(request);
+            }
+
+            /// <summary>For POST endpoints: the handler also gets the request body.</summary>
+            public void Route(string path, Func<HttpListenerRequest, string, (int, string)> handler)
             {
                 _routes[path] = handler;
             }
@@ -271,7 +377,7 @@ namespace Origin.Core.Tests
 
                     RequestLog.Enqueue(new RecordedRequest(request.Url.AbsolutePath, body, request.Headers["token"]));
 
-                    var (status, text) = _routes.TryGetValue(request.Url.AbsolutePath, out var handler) ? handler(request) : (404, "not found");
+                    var (status, text) = _routes.TryGetValue(request.Url.AbsolutePath, out var handler) ? handler(request, body) : (404, "not found");
                     var bytes = Encoding.UTF8.GetBytes(text);
                     context.Response.StatusCode = status;
                     context.Response.ContentType = "application/json";

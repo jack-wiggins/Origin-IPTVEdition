@@ -18,10 +18,16 @@ namespace Origin.Core.SchedulesDirect
 {
     /// <summary>
     /// Client for the Schedules Direct JSON API (https://github.com/SchedulesDirect/JSON-Service/wiki/API-20141201).
-    /// Covers sign-in and lineups; schedules and program metadata come later.
+    /// Covers sign-in, lineups, schedules and program metadata.
     /// </summary>
     public sealed class SdClient : IDisposable
     {
+        /// <summary>The API's limit for POST /schedules and /schedules/md5.</summary>
+        public const int MaxStationsPerRequest = 5000;
+
+        /// <summary>The API's limit for POST /programs.</summary>
+        public const int MaxProgramsPerRequest = 5000;
+
         private static readonly TimeSpan TokenLifetimeFallback = TimeSpan.FromHours(23);
 
         private readonly HttpClient _http;
@@ -158,11 +164,90 @@ namespace Origin.Core.SchedulesDirect
             return SendAsync<SdLineupMap>(HttpMethod.Get, "lineups/" + Uri.EscapeDataString(lineupId), null, authenticated: true, cancellationToken);
         }
 
+        /// <summary>
+        /// POST /schedules/md5: a fingerprint per station and day, so days that have not changed
+        /// need not be downloaded again. Days without data come back with a non-zero code.
+        /// </summary>
+        public async Task<IReadOnlyList<SdScheduleMd5>> GetScheduleMd5sAsync(IReadOnlyCollection<SdScheduleRequest> stations, CancellationToken cancellationToken)
+        {
+            CheckBatch(stations, MaxStationsPerRequest, "stations");
+            if (stations.Count == 0)
+            {
+                return new SdScheduleMd5[0];
+            }
+
+            // { "20454": { "2026-10-18": { "code": 0, "md5": "..." }, ... }, ... }
+            var response = await SendAsync<JObject>(HttpMethod.Post, "schedules/md5", JToken.FromObject(stations, _serializer), authenticated: true, cancellationToken)
+                .ConfigureAwait(false);
+
+            var days = new List<SdScheduleMd5>();
+            foreach (var station in response.Properties())
+            {
+                // A station with nothing to report is an empty array, a station-level error a flat object.
+                if (!(station.Value is JObject dates))
+                {
+                    continue;
+                }
+
+                foreach (var date in dates.Properties())
+                {
+                    if (date.Value is JObject entry)
+                    {
+                        var day = entry.ToObject<SdScheduleMd5>(_serializer);
+                        day.StationId = station.Name;
+                        day.Date = date.Name;
+                        days.Add(day);
+                    }
+                }
+            }
+
+            return days;
+        }
+
+        /// <summary>POST /schedules: one element per station and day; days that could not be returned carry a non-zero code.</summary>
+        public async Task<IReadOnlyList<SdStationSchedule>> GetSchedulesAsync(IReadOnlyCollection<SdScheduleRequest> stations, CancellationToken cancellationToken)
+        {
+            CheckBatch(stations, MaxStationsPerRequest, "stations");
+            if (stations.Count == 0)
+            {
+                return new SdStationSchedule[0];
+            }
+
+            return await SendAsync<List<SdStationSchedule>>(HttpMethod.Post, "schedules", JToken.FromObject(stations, _serializer), authenticated: true, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>POST /programs: titles, descriptions and episode details for up to <see cref="MaxProgramsPerRequest"/> program IDs.</summary>
+        public async Task<IReadOnlyList<SdProgram>> GetProgramsAsync(IReadOnlyCollection<string> programIds, CancellationToken cancellationToken)
+        {
+            CheckBatch(programIds, MaxProgramsPerRequest, "programs");
+            if (programIds.Count == 0)
+            {
+                return new SdProgram[0];
+            }
+
+            return await SendAsync<List<SdProgram>>(HttpMethod.Post, "programs", JToken.FromObject(programIds, _serializer), authenticated: true, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         public void Dispose()
         {
             if (_ownsClient)
             {
                 _http.Dispose();
+            }
+        }
+
+        private static void CheckBatch<T>(IReadOnlyCollection<T> items, int limit, string what)
+        {
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            if (items.Count > limit)
+            {
+                throw new ArgumentException("Schedules Direct accepts at most " + limit + " " + what + " per request.", nameof(items));
             }
         }
 

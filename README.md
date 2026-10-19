@@ -15,10 +15,11 @@ It is written in C# and WPF on .NET Framework 4.8, so it runs on **Windows 7 SP1
 | Lineup | Copies the M3U's live channels into Origin's lineup and matches each one to a station in the Schedules Direct lineup |
 | Channel mapping | Shows every channel, its matched station and how it was matched. Change, clear or hide any channel; your choices survive updates |
 | Channel groups | Choose which playlist groups become channels; number channels from the playlist or from Schedules Direct |
-| Guide | Channel grid with time ruler, laid out for program data |
-| Live TV | Full-screen playback through LibVLC (MPEG-TS and HLS, DXVA2 hardware decoding), channel banner, ch+/ch−, number entry, auto-reconnect |
+| Guide listings | Two weeks of schedules and program details from Schedules Direct, downloaded with the lineup. Unchanged days and programs are skipped by md5, and everything is cached for offline use |
+| Guide | 90-minute grid of program blocks sized by duration. Left/Right move through time, Up/Down through channels; the details panel shows title, episode, description and air time |
+| Live TV | Full-screen playback through LibVLC (MPEG-TS and HLS, DXVA2 hardware decoding), channel banner with what's on now and next, ch+/ch−, number entry, auto-reconnect |
 
-**Not built yet:** schedules and program metadata (the guide shows which station each channel is matched to, but not program titles yet), recording, movies and series libraries.
+**Not built yet:** recording, reminders, movies and series libraries.
 
 ## How the M3U becomes a Schedules Direct lineup
 
@@ -34,6 +35,7 @@ It is written in C# and WPF on .NET Framework 4.8, so it runs on **Windows 7 SP1
    - the cleaned-up name equals a station name or callsign (`US: ESPN FHD` → `espn`)
    - a fuzzy name comparison that refuses to confuse `Fox Sports 1` with `Fox Sports 2`, or East feeds with West
 5. **Number and save.** Each channel takes its `tvg-chno` (or its Schedules Direct channel number, if you choose that), and the rest are numbered in playlist order. Hidden channels and hand-picked matches carry over from the previous lineup.
+6. **Download the guide.** For every matched station, [`GuideDownloader`](src/Origin.Core/Guide/GuideDownloader.cs) asks `POST /schedules/md5` for yesterday plus the next 14 days, downloads only the days whose md5 changed (`POST /schedules`), then the details of programs that are new or changed (`POST /programs`, 5,000 at a time). [`GuideStore`](src/Origin.Core/Guide/GuideStore.cs) keeps them in `cache\guide` and answers "what's on station X between two times". If Schedules Direct is down, the update still succeeds and the guide keeps its last listings.
 
 ## Remote control and keyboard
 
@@ -82,8 +84,9 @@ Settings, the lineup and logs live in `%LOCALAPPDATA%\OriginHTPC`. Passwords are
 src/Origin.Core      Network, parsing, Schedules Direct, matching and storage (no UI)
   Iptv/              M3U parser, playlist import, credential-free stream references
   Xtream/            Xtream Codes URLs and client (player_api.php, get.php)
-  SchedulesDirect/   JSON API client (20141201), session handling, lineup cache
+  SchedulesDirect/   JSON API client (20141201): sign-in, lineups, schedules, programs
   Lineup/            Channel matcher, lineup composer, store and update service
+  Guide/             Schedule and program download, on-disk guide cache, grid layout
 src/Origin.App       WPF application (OriginHTPC.exe)
   Rendering/         Direct3D 9Ex ribbon background hosted in a D3DImage
   Input/             Keyboard, MCE remote and WM_APPCOMMAND mapping

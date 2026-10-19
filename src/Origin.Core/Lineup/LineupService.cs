@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Origin.Core.Diagnostics;
+using Origin.Core.Guide;
 using Origin.Core.Iptv;
 using Origin.Core.SchedulesDirect;
 using Origin.Core.Settings;
@@ -19,6 +22,12 @@ namespace Origin.Core.Lineup
 
         /// <summary>Download the Schedules Direct lineup again. When false, the cached copy is used.</summary>
         public bool RefreshSchedulesDirect { get; set; } = true;
+
+        /// <summary>
+        /// Download guide listings for the matched stations. When <see cref="RefreshSchedulesDirect"/>
+        /// is false, only stations that have no listings yet are downloaded.
+        /// </summary>
+        public bool DownloadGuide { get; set; } = true;
     }
 
     public sealed class LineupUpdateProgress
@@ -56,6 +65,9 @@ namespace Origin.Core.Lineup
 
         public bool UsedSchedulesDirect { get; set; }
 
+        /// <summary>Null when the guide was not downloaded (nothing matched, or Schedules Direct could not be reached).</summary>
+        public GuideUpdateResult Guide { get; set; }
+
         public List<string> Warnings { get; } = new List<string>();
 
         public TimeSpan Duration { get; set; }
@@ -69,8 +81,8 @@ namespace Origin.Core.Lineup
     }
 
     /// <summary>
-    /// Runs "Update lineup" (download the M3U, fetch the Schedules Direct lineup, match, save)
-    /// and the manual edits made on the channel mapping screen.
+    /// Runs "Update lineup" (download the M3U, fetch the Schedules Direct lineup, match, save,
+    /// then download the guide) and the manual edits made on the channel mapping screen.
     /// </summary>
     public sealed class LineupService
     {
@@ -78,14 +90,16 @@ namespace Origin.Core.Lineup
         private readonly PlaylistStore _playlists;
         private readonly LineupStore _lineups;
         private readonly SchedulesDirectService _schedulesDirect;
+        private readonly GuideDownloader _guide;
         private readonly SemaphoreSlim _updateGate = new SemaphoreSlim(1, 1);
 
-        public LineupService(SettingsService settings, PlaylistStore playlists, LineupStore lineups, SchedulesDirectService schedulesDirect)
+        public LineupService(SettingsService settings, PlaylistStore playlists, LineupStore lineups, SchedulesDirectService schedulesDirect, GuideDownloader guide)
         {
             _settings = settings;
             _playlists = playlists;
             _lineups = lineups;
             _schedulesDirect = schedulesDirect;
+            _guide = guide;
         }
 
         public bool IsUpdating => _updateGate.CurrentCount == 0;
@@ -243,9 +257,69 @@ namespace Origin.Core.Lineup
             _lineups.Replace(lineup);
 
             result.Lineup = lineup;
+            Log.Info($"Lineup updated: {result.Channels} channels, {result.Mapped} matched, {result.Unmapped} unmatched in {stopwatch.Elapsed.TotalSeconds:0.0}s");
+
+            // 4. Guide listings for the matched stations. The lineup is saved by now, so problems here are warnings.
+            if (options.DownloadGuide)
+            {
+                result.Guide = await DownloadGuideAsync(lineup, options, result, progress, cancellationToken).ConfigureAwait(false);
+            }
+
             result.Duration = stopwatch.Elapsed;
-            Log.Info($"Lineup updated: {result.Channels} channels, {result.Mapped} matched, {result.Unmapped} unmatched in {result.Duration.TotalSeconds:0.0}s");
             return result;
+        }
+
+        /// <summary>
+        /// Brings the guide up to date for the lineup's matched stations. Never fails the update:
+        /// if Schedules Direct is down, or the user cancels, the guide keeps what it had.
+        /// </summary>
+        private async Task<GuideUpdateResult> DownloadGuideAsync(
+            OriginLineup lineup, LineupUpdateOptions options, LineupUpdateResult result, IProgress<LineupUpdateProgress> progress, CancellationToken cancellationToken)
+        {
+            var stations = lineup.Channels
+                .Where(c => c.Enabled && c.IsMapped)
+                .Select(c => c.Mapping.StationId)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (stations.Count > 0 && !_schedulesDirect.IsConfigured)
+            {
+                result.Warnings.Add("Sign in to Schedules Direct under Settings to download guide listings.");
+                return null;
+            }
+
+            try
+            {
+                var guide = await _guide.UpdateAsync(stations, onlyMissing: !options.RefreshSchedulesDirect, progress, cancellationToken)
+                    .ConfigureAwait(false);
+                if (guide.Stations > 0 && guide.StationsWithListings == 0)
+                {
+                    result.Warnings.Add("Schedules Direct has no guide listings for your channels yet. Try updating again later.");
+                }
+
+                return guide;
+            }
+            catch (SdApiException ex)
+            {
+                Log.Warn("Guide download failed", ex);
+                result.Warnings.Add(ex.Message + " The guide keeps the listings it already had.");
+            }
+            catch (JsonException ex)
+            {
+                Log.Warn("Guide download failed", ex);
+                result.Warnings.Add("Schedules Direct sent guide data Origin could not read. The guide keeps the listings it already had.");
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Log.Warn("Guide download failed", ex);
+                result.Warnings.Add("The guide listings could not be saved: " + ex.Message);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                result.Warnings.Add("The guide download was cancelled. The guide shows what had been downloaded so far.");
+            }
+
+            return null;
         }
 
         private async Task<PlaylistSnapshot> DownloadPlaylistAsync(IProgress<LineupUpdateProgress> progress, CancellationToken cancellationToken)
